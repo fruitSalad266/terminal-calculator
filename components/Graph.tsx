@@ -12,6 +12,7 @@ export function Graph({ expression }: GraphProps) {
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+  const [hoverPoint, setHoverPoint] = useState<{ x: number; y: number } | null>(null)
 
   const shouldGraph = (expr: string): boolean => {
     const lower = expr.toLowerCase().trim()
@@ -25,7 +26,7 @@ export function Graph({ expression }: GraphProps) {
     )
   }
 
-  const drawGraph = (expr: string, offsetX: number, offsetY: number) => {
+  const drawGraph = (expr: string, offsetX: number, offsetY: number, hoverPt: { x: number; y: number } | null = null) => {
     const canvas = canvasRef.current
     if (!canvas) return
 
@@ -128,6 +129,23 @@ export function Graph({ expression }: GraphProps) {
 
     ctx.stroke()
 
+    // Draw hover dot if hovering
+    if (hoverPt) {
+      const canvasX = ((hoverPt.x - xMin) / (xMax - xMin)) * width
+      const canvasY = height - ((hoverPt.y - yMin) / (yMax - yMin)) * height
+      
+      ctx.fillStyle = "#4a9eff"
+      ctx.beginPath()
+      ctx.arc(canvasX, canvasY, 6, 0, 2 * Math.PI)
+      ctx.fill()
+      
+      // Draw inner white dot
+      ctx.fillStyle = "#ffffff"
+      ctx.beginPath()
+      ctx.arc(canvasX, canvasY, 3, 0, 2 * Math.PI)
+      ctx.fill()
+    }
+
     // Draw axis labels and scale numbers
     ctx.fillStyle = "#666"
     ctx.font = "11px monospace"
@@ -171,25 +189,60 @@ export function Graph({ expression }: GraphProps) {
     setDragStart({ x: e.clientX, y: e.clientY })
   }
 
+  const calculateYFromX = (x: number, expr: string): number | null => {
+    try {
+      const evalExpr = expr
+        .toLowerCase()
+        .replace(/y\s*=\s*/, "")
+        .trim()
+      const exprWithX = evalExpr.replace(/x/g, `(${x})`)
+      const y = evaluate(exprWithX)
+      if (typeof y === "number" && isFinite(y)) {
+        return y
+      }
+    } catch (e) {
+      // Invalid expression
+    }
+    return null
+  }
+
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDragging) return
-    
     const canvas = canvasRef.current
     if (!canvas) return
-    
-    const dx = e.clientX - dragStart.x
-    const dy = e.clientY - dragStart.y
-    
-    // Convert pixel movement to graph units
-    const graphDx = -(dx / canvas.width) * 20
-    const graphDy = (dy / canvas.height) * 20
-    
-    setPanOffset(prev => ({
-      x: prev.x + graphDx,
-      y: prev.y + graphDy
-    }))
-    
-    setDragStart({ x: e.clientX, y: e.clientY })
+
+    if (isDragging) {
+      const dx = e.clientX - dragStart.x
+      const dy = e.clientY - dragStart.y
+      
+      // Convert pixel movement to graph units
+      const graphDx = -(dx / canvas.width) * 20
+      const graphDy = (dy / canvas.height) * 20
+      
+      setPanOffset(prev => ({
+        x: prev.x + graphDx,
+        y: prev.y + graphDy
+      }))
+      
+      setDragStart({ x: e.clientX, y: e.clientY })
+    } else {
+      // Calculate hover position
+      const rect = canvas.getBoundingClientRect()
+      const canvasX = e.clientX - rect.left
+      
+      // Convert canvas x to graph x
+      const baseRange = 10
+      const xMin = -baseRange + panOffset.x
+      const xMax = baseRange + panOffset.x
+      
+      const graphX = xMin + (canvasX / canvas.width) * (xMax - xMin)
+      const graphY = calculateYFromX(graphX, expression)
+      
+      if (graphY !== null) {
+        setHoverPoint({ x: graphX, y: graphY })
+      } else {
+        setHoverPoint(null)
+      }
+    }
   }
 
   const handleMouseUp = () => {
@@ -198,13 +251,14 @@ export function Graph({ expression }: GraphProps) {
 
   const handleMouseLeave = () => {
     setIsDragging(false)
+    setHoverPoint(null)
   }
 
   useEffect(() => {
     if (expression && shouldGraph(expression)) {
-      drawGraph(expression, panOffset.x, panOffset.y)
+      drawGraph(expression, panOffset.x, panOffset.y, hoverPoint)
     }
-  }, [expression, panOffset])
+  }, [expression, panOffset, hoverPoint])
 
   // Reset pan offset when expression changes
   useEffect(() => {
@@ -220,17 +274,32 @@ export function Graph({ expression }: GraphProps) {
       <div className="border-b border-[#1a1a1a] px-4 py-1">
         <span className="text-[#777] text-sm">GRAPH</span>
       </div>
-      <div className="flex-1 flex items-center justify-center p-2">
-        <canvas 
-          ref={canvasRef} 
-          width={570} 
-          height={570} 
-          className={`border border-[#1a1a1a] ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseLeave}
-        />
+      <div className="flex-1 flex flex-col p-1 overflow-auto">
+        <div className="flex-1 flex items-center justify-center flex-shrink-0 px-2">
+          <canvas 
+            ref={canvasRef} 
+            width={570} 
+            height={520} 
+            className={`border border-[#1a1a1a] w-full ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseLeave}
+          />
+        </div>
+        <div className="mt-2 mx-2 border border-[#1a1a1a] bg-[#0f0f0f] px-3 py-2 flex-shrink-0">
+          <div className="text-[#777] text-xs mb-1">DOT POSITION</div>
+          <div className="text-[#e0e0e0] text-sm font-mono">
+            {hoverPoint ? (
+              <>
+                <span className="text-[#4a9eff]">x:</span> {hoverPoint.x.toFixed(3)}
+                <span className="ml-4 text-[#4a9eff]">y:</span> {hoverPoint.y.toFixed(3)}
+              </>
+            ) : (
+              <span className="text-[#666]">hover over graph</span>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )
