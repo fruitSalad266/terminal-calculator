@@ -17,6 +17,8 @@ interface EntrySpaceProps {
   setHistory: (history: HistoryEntry[]) => void
   historyIndex: number
   setHistoryIndex: (index: number) => void
+  variables: Record<string, number>
+  setVariables: (variables: Record<string, number>) => void
 }
 
 export function EntrySpace({
@@ -26,6 +28,8 @@ export function EntrySpace({
   setHistory,
   historyIndex,
   setHistoryIndex,
+  variables,
+  setVariables,
 }: EntrySpaceProps) {
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -43,6 +47,38 @@ export function EntrySpace({
     return () => document.removeEventListener("click", handleClick)
   }, [])
 
+  const isVariableAssignment = (expr: string): { isAssignment: boolean; varName?: string; value?: number; error?: boolean } => {
+    // Match pattern: [letter] = [something]
+    // But exclude x and y
+    const match = expr.trim().match(/^([a-wz])[\s]*=[\s]*(.*)$/i)
+    if (match) {
+      const varName = match[1].toLowerCase()
+      const valueExpr = match[2].trim()
+      
+      // Check if value expression is empty
+      if (!valueExpr) {
+        return { isAssignment: true, error: true, varName }
+      }
+      
+      try {
+        // Process the value expression (could include other variables)
+        const processedExpr = replaceVariablesAndAnswers(valueExpr)
+        const value = evaluate(processedExpr)
+        
+        if (typeof value === 'number' && isFinite(value)) {
+          return { isAssignment: true, varName, value }
+        } else {
+          // Non-numeric result
+          return { isAssignment: true, error: true, varName }
+        }
+      } catch (e) {
+        // Invalid expression
+        return { isAssignment: true, error: true, varName }
+      }
+    }
+    return { isAssignment: false }
+  }
+
   const isGraphEquation = (expr: string): boolean => {
     const lower = expr.toLowerCase().trim()
     return (
@@ -55,8 +91,14 @@ export function EntrySpace({
     )
   }
 
-  const replaceAnswerReferences = (expr: string): string => {
+  const replaceVariablesAndAnswers = (expr: string): string => {
     let result = expr
+
+    // Replace custom variables
+    for (const [varName, value] of Object.entries(variables)) {
+      const pattern = new RegExp(`\\b${varName}\\b`, "g")
+      result = result.replace(pattern, String(value))
+    }
 
     // Replace ans with most recent result (highest ID)
     if (history.length > 0) {
@@ -75,9 +117,23 @@ export function EntrySpace({
     return result
   }
 
+  // Keep old function name for backward compatibility
+  const replaceAnswerReferences = replaceVariablesAndAnswers
+
   // Calculate preview result
-  const getPreview = (): { value: string; type: "normal" | "error" | "graph" } => {
+  const getPreview = (): { value: string; type: "normal" | "error" | "graph" | "variable" } => {
     if (!input.trim()) return { value: "", type: "normal" }
+    
+    // Check if it's a variable assignment
+    const varAssignment = isVariableAssignment(input)
+    if (varAssignment.isAssignment) {
+      if (varAssignment.error) {
+        return { value: "ERR", type: "error" }
+      }
+      if (varAssignment.value !== undefined) {
+        return { value: String(varAssignment.value), type: "variable" }
+      }
+    }
     
     // Check if it's a graph equation
     if (isGraphEquation(input)) {
@@ -88,12 +144,13 @@ export function EntrySpace({
       const processedInput = replaceAnswerReferences(input)
       const result = evaluate(processedInput)
       
-      // Don't show preview for functions or other non-numeric results
-      if (typeof result === 'function' || typeof result === 'object') {
-        return { value: "", type: "normal" }
+      // Check if result is numeric
+      if (typeof result === 'number' && isFinite(result)) {
+        return { value: String(result), type: "normal" }
       }
       
-      return { value: String(result), type: "normal" }
+      // Non-numeric result (undefined variable, function, object, etc.)
+      return { value: "ERR", type: "error" }
     } catch {
       return { value: "ERR", type: "error" }
     }
@@ -143,6 +200,48 @@ export function EntrySpace({
     if (e.key === "Enter") {
       e.preventDefault()
       if (input.trim()) {
+        // Check if it's a variable assignment
+        const varAssignment = isVariableAssignment(input)
+        if (varAssignment.isAssignment) {
+          // Check if there's an error in the assignment
+          if (varAssignment.error) {
+            // Add error to history
+            const maxId = history.length > 0 ? Math.max(...history.map(h => h.id)) : 0
+            const entry: HistoryEntry = {
+              id: maxId + 1,
+              expression: input,
+              result: "ERR",
+              timestamp: Date.now(),
+            }
+            setHistory([entry, ...history].slice(0, 100))
+            setInput("")
+            setHistoryIndex(-1)
+            return
+          }
+          
+          // Valid assignment
+          if (varAssignment.varName && varAssignment.value !== undefined) {
+            // Store the variable
+            setVariables({
+              ...variables,
+              [varAssignment.varName]: varAssignment.value
+            })
+            
+            // Add to history
+            const maxId = history.length > 0 ? Math.max(...history.map(h => h.id)) : 0
+            const entry: HistoryEntry = {
+              id: maxId + 1,
+              expression: input,
+              result: String(varAssignment.value),
+              timestamp: Date.now(),
+            }
+            setHistory([entry, ...history].slice(0, 100))
+            setInput("")
+            setHistoryIndex(-1)
+            return
+          }
+        }
+
         let resultValue: string
         let intermediateExpr: string = ""
         
@@ -153,10 +252,16 @@ export function EntrySpace({
           try {
             const processedInput = replaceAnswerReferences(input)
             const result = evaluate(processedInput)
-            resultValue = String(result)
             
-            // Get intermediate expression for parentheses expressions
-            intermediateExpr = getIntermediateExpression(input)
+            // Check if result is numeric
+            if (typeof result === 'number' && isFinite(result)) {
+              resultValue = String(result)
+              // Get intermediate expression for parentheses expressions
+              intermediateExpr = getIntermediateExpression(input)
+            } else {
+              // Non-numeric result (undefined variable, function, object, etc.)
+              resultValue = "ERR"
+            }
           } catch (error) {
             // Invalid expression - store as ERR
             resultValue = "ERR"
@@ -246,6 +351,7 @@ export function EntrySpace({
               <span className={`font-medium ${
                 preview.type === "error" ? "text-red-500" : 
                 preview.type === "graph" ? "text-orange-500" : 
+                preview.type === "variable" ? "text-green-500" :
                 "text-[#4a9eff]"
               }`}>
                 {preview.value}
@@ -260,6 +366,8 @@ export function EntrySpace({
         <span>↑↓=recall</span>
         <span className="text-[#444]">|</span>
         <span>ans ans1 ans2=previous results</span>
+        <span className="text-[#444]">|</span>
+        <span>variables: a=3 b=4</span>
         <span className="text-[#444]">|</span>
         <span>auto-graph: sin cos tan y=</span>
       </div>

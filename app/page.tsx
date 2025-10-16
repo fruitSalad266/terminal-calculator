@@ -11,6 +11,7 @@ export default function Calculator() {
   const [input, setInput] = useState("")
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
+  const [variables, setVariables] = useState<Record<string, number>>({})
 
   // Load history from localStorage on mount
   useEffect(() => {
@@ -26,6 +27,14 @@ export default function Calculator() {
     }
   }, [])
 
+  // Load variables from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("calc-variables")
+    if (saved) {
+      setVariables(JSON.parse(saved))
+    }
+  }, [])
+
   // Save history to localStorage
   useEffect(() => {
     if (history.length > 0) {
@@ -33,10 +42,22 @@ export default function Calculator() {
     }
   }, [history])
 
+  // Save variables to localStorage
+  useEffect(() => {
+    if (Object.keys(variables).length > 0) {
+      localStorage.setItem("calc-variables", JSON.stringify(variables))
+    }
+  }, [variables])
+
 
   const clearHistory = () => {
     setHistory([])
     localStorage.removeItem("calc-history")
+  }
+
+  const clearVariables = () => {
+    setVariables({})
+    localStorage.removeItem("calc-variables")
   }
 
   const showAbout = () => {
@@ -92,8 +113,8 @@ export default function Calculator() {
         </div>
 
         <div className="flex-1 overflow-hidden flex">
-          <History history={history} historyIndex={historyIndex} onSelectEntry={setInput} />
-          <Graph expression={input} />
+          <History history={history} historyIndex={historyIndex} onSelectEntry={setInput} variables={variables} onClearVariables={clearVariables} />
+          <Graph expression={input} variables={variables} />
         </div>
 
         <EntrySpace
@@ -103,6 +124,8 @@ export default function Calculator() {
           setHistory={setHistory}
           historyIndex={historyIndex}
           setHistoryIndex={setHistoryIndex}
+          variables={variables}
+          setVariables={setVariables}
         />
       </div>
     </div>

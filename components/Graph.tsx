@@ -5,14 +5,24 @@ import { evaluate } from "mathjs"
 
 interface GraphProps {
   expression: string
+  variables: Record<string, number>
 }
 
-export function Graph({ expression }: GraphProps) {
+export function Graph({ expression, variables }: GraphProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const [hoverPoint, setHoverPoint] = useState<{ x: number; y: number } | null>(null)
+
+  const replaceVariables = (expr: string): string => {
+    let result = expr
+    for (const [varName, value] of Object.entries(variables)) {
+      const pattern = new RegExp(`\\b${varName}\\b`, "g")
+      result = result.replace(pattern, String(value))
+    }
+    return result
+  }
 
   const shouldGraph = (expr: string): boolean => {
     const lower = expr.toLowerCase().trim()
@@ -97,10 +107,13 @@ export function Graph({ expression }: GraphProps) {
     const step = (xMax - xMin) / width
 
     // Prepare expression for evaluation
-    const evalExpr = expr
+    let evalExpr = expr
       .toLowerCase()
       .replace(/y\s*=\s*/, "")
       .trim()
+    
+    // Replace custom variables
+    evalExpr = replaceVariables(evalExpr)
 
     for (let px = 0; px < width; px++) {
       const x = xMin + px * step
@@ -191,10 +204,14 @@ export function Graph({ expression }: GraphProps) {
 
   const calculateYFromX = (x: number, expr: string): number | null => {
     try {
-      const evalExpr = expr
+      let evalExpr = expr
         .toLowerCase()
         .replace(/y\s*=\s*/, "")
         .trim()
+      
+      // Replace custom variables
+      evalExpr = replaceVariables(evalExpr)
+      
       const exprWithX = evalExpr.replace(/x/g, `(${x})`)
       const y = evaluate(exprWithX)
       if (typeof y === "number" && isFinite(y)) {
@@ -258,7 +275,7 @@ export function Graph({ expression }: GraphProps) {
     if (expression && shouldGraph(expression)) {
       drawGraph(expression, panOffset.x, panOffset.y, hoverPoint)
     }
-  }, [expression, panOffset, hoverPoint])
+  }, [expression, panOffset, hoverPoint, variables])
 
   // Reset pan offset when expression changes
   useEffect(() => {
