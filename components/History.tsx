@@ -79,7 +79,7 @@ export function History({ history, historyIndex, onSelectEntry, variables, onCle
           <div className="flex items-center justify-center h-full text-[#444] text-xs">NO HISTORY</div>
         ) : history.length > 0 ? (
           <>
-            <div className={`${hasVariables ? '' : 'sticky top-0'} bg-[#0a0a0a] border-b border-[#1a1a1a] px-4 py-1 z-10`}>
+            <div className="sticky top-0 bg-[#0a0a0a] border-b border-[#1a1a1a] px-4 py-1 z-10">
               <span className="text-[#777] text-sm">HISTORY</span>
             </div>
           <div className="divide-y divide-[#1a1a1a]">
