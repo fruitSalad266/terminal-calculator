@@ -14,6 +14,7 @@ export function Graph({ expression, variables }: GraphProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const [hoverPoint, setHoverPoint] = useState<{ x: number; y: number } | null>(null)
+  const [zoomLevel, setZoomLevel] = useState(1)
 
   const replaceVariables = (expr: string): string => {
     let result = expr
@@ -46,8 +47,8 @@ export function Graph({ expression, variables }: GraphProps) {
     const width = canvas.width
     const height = canvas.height
 
-    // Calculate view bounds with pan offset
-    const baseRange = 10
+    // Calculate view bounds with pan offset and zoom
+    const baseRange = 10 / zoomLevel
     const xMin = -baseRange + offsetX
     const xMax = baseRange + offsetX
     const yMin = -baseRange + offsetY
@@ -168,23 +169,31 @@ export function Graph({ expression, variables }: GraphProps) {
       ctx.fillText("0", yAxisX + 4, xAxisY - 4)
     }
     
-    // X-axis labels
-    const xLabelValues = [-10, -5, 5, 10]
+    // X-axis labels - adjust based on zoom level
+    const xLabelStep = Math.max(1, Math.ceil(baseRange / 5))
+    const xLabelValues = []
+    for (let i = -Math.ceil(baseRange); i <= Math.ceil(baseRange); i += xLabelStep) {
+      xLabelValues.push(i)
+    }
     xLabelValues.forEach(val => {
       const actualVal = val + offsetX
       const xPos = width / 2 + ((val) * width) / (xMax - xMin)
       if (xAxisY >= 0 && xAxisY <= height) {
-        ctx.fillText(String(Math.round(actualVal * 10) / 10), xPos - 12, xAxisY + 14)
+        ctx.fillText(String(Math.round(actualVal * 100) / 100), xPos - 12, xAxisY + 14)
       }
     })
     
-    // Y-axis labels
-    const yLabelValues = [-10, -5, 5, 10]
+    // Y-axis labels - adjust based on zoom level
+    const yLabelStep = Math.max(1, Math.ceil(baseRange / 5))
+    const yLabelValues = []
+    for (let i = -Math.ceil(baseRange); i <= Math.ceil(baseRange); i += yLabelStep) {
+      yLabelValues.push(i)
+    }
     yLabelValues.forEach(val => {
       const actualVal = val + offsetY
       const yPos = height / 2 - ((val) * height) / (yMax - yMin)
       if (yAxisX >= 0 && yAxisX <= width) {
-        ctx.fillText(String(Math.round(actualVal * 10) / 10), yAxisX + 8, yPos + 4)
+        ctx.fillText(String(Math.round(actualVal * 100) / 100), yAxisX + 8, yPos + 4)
       }
     })
     
@@ -231,9 +240,10 @@ export function Graph({ expression, variables }: GraphProps) {
       const dx = e.clientX - dragStart.x
       const dy = e.clientY - dragStart.y
       
-      // Convert pixel movement to graph units
-      const graphDx = -(dx / canvas.width) * 20
-      const graphDy = (dy / canvas.height) * 20
+      // Convert pixel movement to graph units (adjusted for zoom)
+      const baseRange = 10 / zoomLevel
+      const graphDx = -(dx / canvas.width) * (baseRange * 2)
+      const graphDy = (dy / canvas.height) * (baseRange * 2)
       
       setPanOffset(prev => ({
         x: prev.x + graphDx,
@@ -247,7 +257,7 @@ export function Graph({ expression, variables }: GraphProps) {
       const canvasX = e.clientX - rect.left
       
       // Convert canvas x to graph x
-      const baseRange = 10
+      const baseRange = 10 / zoomLevel
       const xMin = -baseRange + panOffset.x
       const xMax = baseRange + panOffset.x
       
@@ -271,15 +281,36 @@ export function Graph({ expression, variables }: GraphProps) {
     setHoverPoint(null)
   }
 
+  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault()
+    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1
+    const newZoomLevel = Math.max(0.1, Math.min(10, zoomLevel * zoomFactor))
+    setZoomLevel(newZoomLevel)
+  }
+
+  const handleZoomIn = () => {
+    setZoomLevel(prev => Math.min(10, prev * 1.2))
+  }
+
+  const handleZoomOut = () => {
+    setZoomLevel(prev => Math.max(0.1, prev / 1.2))
+  }
+
+  const handleResetZoom = () => {
+    setZoomLevel(1)
+    setPanOffset({ x: 0, y: 0 })
+  }
+
   useEffect(() => {
     if (expression && shouldGraph(expression)) {
       drawGraph(expression, panOffset.x, panOffset.y, hoverPoint)
     }
-  }, [expression, panOffset, hoverPoint, variables])
+  }, [expression, panOffset, hoverPoint, variables, zoomLevel])
 
-  // Reset pan offset when expression changes
+  // Reset pan offset and zoom when expression changes
   useEffect(() => {
     setPanOffset({ x: 0, y: 0 })
+    setZoomLevel(1)
   }, [expression])
 
   if (!expression || !shouldGraph(expression)) {
@@ -288,8 +319,31 @@ export function Graph({ expression, variables }: GraphProps) {
 
   return (
     <div className="w-[600px] bg-[#0a0a0a] flex flex-col">
-      <div className="border-b border-[#1a1a1a] px-4 py-1">
+      <div className="bg-[#0f0f0f] border-b border-[#1a1a1a] px-4 py-1 flex items-center justify-between">
         <span className="text-[#777] text-sm">GRAPH</span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleZoomOut}
+            className="text-xs text-[#666] hover:text-[#e0e0e0] transition-colors px-2 py-1 border border-[#333] rounded"
+          >
+            −
+          </button>
+          <span className="text-xs text-[#666] min-w-[60px] text-center">
+            {zoomLevel.toFixed(1)}x
+          </span>
+          <button
+            onClick={handleZoomIn}
+            className="text-xs text-[#666] hover:text-[#e0e0e0] transition-colors px-2 py-1 border border-[#333] rounded"
+          >
+            +
+          </button>
+          <button
+            onClick={handleResetZoom}
+            className="text-xs text-[#666] hover:text-[#e0e0e0] transition-colors px-2 py-1 border border-[#333] rounded ml-2"
+          >
+            RESET
+          </button>
+        </div>
       </div>
       <div className="flex-1 flex flex-col p-1 overflow-auto">
         <div className="flex-1 flex items-center justify-center flex-shrink-0 px-2">
@@ -302,6 +356,7 @@ export function Graph({ expression, variables }: GraphProps) {
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseLeave}
+            onWheel={handleWheel}
           />
         </div>
         <div className="mt-2 mx-2 border border-[#1a1a1a] bg-[#0f0f0f] px-3 py-2 flex-shrink-0">

@@ -13,9 +13,10 @@ interface HistoryProps {
   onSelectEntry: (expression: string) => void
   variables: Record<string, number>
   onClearVariables: () => void
+  onClearHistory: () => void
 }
 
-export function History({ history, historyIndex, onSelectEntry, variables, onClearVariables }: HistoryProps) {
+export function History({ history, historyIndex, onSelectEntry, variables, onClearVariables, onClearHistory }: HistoryProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const prevLengthRef = useRef(0)
   const selectedEntryRef = useRef<HTMLDivElement>(null)
@@ -44,7 +45,7 @@ export function History({ history, historyIndex, onSelectEntry, variables, onCle
     <div className="flex-1 overflow-y-auto border-r border-[#1a1a1a] flex flex-col">
       {/* Variables Section - Always Sticky */}
       {hasVariables && (
-        <div className="sticky top-0 bg-[#0a0a0a] border-b border-[#1a1a1a] z-10">
+        <div className="sticky top-0 bg-[#0f0f0f] border-b border-[#1a1a1a] z-10">
           <div className="flex items-center justify-between px-4 py-1">
             <div className="relative group">
               <span className="text-[#777] text-sm cursor-help">VARIABLES</span>
@@ -59,13 +60,13 @@ export function History({ history, historyIndex, onSelectEntry, variables, onCle
               CLEAR
             </button>
           </div>
-          <div className="px-3 py-2 flex flex-wrap gap-2 border-t border-[#1a1a1a]">
+          <div className="px-3 py-2 flex flex-wrap gap-2 border-t border-[#1a1a1a] bg-[#0a0a0a]">
             {Object.entries(variables)
               .sort(([a], [b]) => a.localeCompare(b))
               .map(([varName, value]) => (
                 <div
                   key={varName}
-                  className="px-3 py-1.5 bg-[#0f0f0f] border border-[#1a1a1a] rounded hover:bg-[#1a1a1a] transition-colors"
+                  className="px-3 py-1.5 bg-[#0a0a0a] border border-[#1a1a1a] rounded hover:bg-[#1a1a1a] transition-colors"
                 >
                   <div className="flex items-center gap-2">
                     <span className={`text-sm font-medium ${
@@ -86,8 +87,16 @@ export function History({ history, historyIndex, onSelectEntry, variables, onCle
           <div className="flex items-center justify-center h-full text-[#444] text-xs">NO HISTORY</div>
         ) : history.length > 0 ? (
           <>
-            <div className="sticky top-0 bg-[#0a0a0a] border-b border-[#1a1a1a] px-4 py-1 z-10">
+            <div className="sticky top-0 bg-[#0f0f0f] border-b border-[#1a1a1a] px-4 py-1 z-10 flex items-center justify-between">
               <span className="text-[#777] text-sm">HISTORY</span>
+              {history.length > 0 && (
+                <button 
+                  onClick={onClearHistory}
+                  className="text-xs text-[#666] hover:text-[#e0e0e0] transition-colors"
+                >
+                  CLEAR
+                </button>
+              )}
             </div>
           <div className="divide-y divide-[#1a1a1a]">
             {history.slice().reverse().map((entry, displayIndex) => {

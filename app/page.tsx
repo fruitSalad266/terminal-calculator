@@ -105,15 +105,15 @@ export default function Calculator() {
               </>
             )}
           </div>
-          {history.length > 0 && (
-            <button onClick={clearHistory} className="text-xs text-[#666] hover:text-[#e0e0e0] transition-colors">
-              CLEAR
+          {(history.length > 0 || Object.keys(variables).length > 0) && (
+            <button onClick={() => { clearHistory(); clearVariables(); }} className="text-xs text-[#666] hover:text-[#e0e0e0] transition-colors">
+              CLEAR ALL
             </button>
           )}
         </div>
 
         <div className="flex-1 overflow-hidden flex">
-          <History history={history} historyIndex={historyIndex} onSelectEntry={setInput} variables={variables} onClearVariables={clearVariables} />
+          <History history={history} historyIndex={historyIndex} onSelectEntry={setInput} variables={variables} onClearVariables={clearVariables} onClearHistory={clearHistory} />
           <Graph expression={input} variables={variables} />
         </div>
 
