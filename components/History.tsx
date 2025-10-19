@@ -46,7 +46,12 @@ export function History({ history, historyIndex, onSelectEntry, variables, onCle
       {hasVariables && (
         <div className="sticky top-0 bg-[#0a0a0a] border-b border-[#1a1a1a] z-10">
           <div className="flex items-center justify-between px-4 py-1">
-            <span className="text-[#777] text-sm">VARIABLES</span>
+            <div className="relative group">
+              <span className="text-[#777] text-sm cursor-help">VARIABLES</span>
+              <div className="absolute top-full left-0 mt-1 px-3 py-2 bg-[#1a1a1a] border border-[#333] rounded text-xs text-[#ccc] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20 pointer-events-none">
+                assign variables with a = [number], e can be assigned but will replace the constant e. x and y are reserved and cannot be assigned
+              </div>
+            </div>
             <button 
               onClick={onClearVariables}
               className="text-xs text-[#666] hover:text-[#e0e0e0] transition-colors"
@@ -63,7 +68,9 @@ export function History({ history, historyIndex, onSelectEntry, variables, onCle
                   className="px-3 py-1.5 bg-[#0f0f0f] border border-[#1a1a1a] rounded hover:bg-[#1a1a1a] transition-colors"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-[#E3E3E3] font-medium">{varName}</span>
+                    <span className={`text-sm font-medium ${
+                      varName === 'e' ? 'text-red-400' : 'text-[#E3E3E3]'
+                    }`}>{varName}</span>
                     <span className="text-[#666]">=</span>
                     <span className="text-sm text-green-500 font-medium">{value}</span>
                   </div>
