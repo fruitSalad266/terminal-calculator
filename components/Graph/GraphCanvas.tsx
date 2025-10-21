@@ -1,20 +1,19 @@
-"use client"
-
-import { useEffect, useRef, useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import { evaluate } from "mathjs"
 
-interface GraphProps {
+interface GraphCanvasProps {
   expression: string
   variables: Record<string, number>
+  panOffset: { x: number; y: number }
+  zoomLevel: number
+  onPanChange: (offset: { x: number; y: number }) => void
 }
 
-export function Graph({ expression, variables }: GraphProps) {
+export function GraphCanvas({ expression, variables, panOffset, zoomLevel, onPanChange }: GraphCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const [hoverPoint, setHoverPoint] = useState<{ x: number; y: number } | null>(null)
-  const [zoomLevel, setZoomLevel] = useState(1)
 
   const replaceVariables = (expr: string): string => {
     let result = expr
@@ -25,16 +24,25 @@ export function Graph({ expression, variables }: GraphProps) {
     return result
   }
 
-  const shouldGraph = (expr: string): boolean => {
-    const lower = expr.toLowerCase().trim()
-    return (
-      lower.includes("sin") ||
-      lower.includes("cos") ||
-      lower.includes("tan") ||
-      lower.includes("y=") ||
-      lower.includes("y =") ||
-      lower.match(/\b[xy]\b/) !== null
-    )
+  const calculateYFromX = (x: number, expr: string): number | null => {
+    try {
+      let evalExpr = expr
+        .toLowerCase()
+        .replace(/y\s*=\s*/, "")
+        .trim()
+      
+      // Replace custom variables
+      evalExpr = replaceVariables(evalExpr)
+      
+      const exprWithX = evalExpr.replace(/x/g, `(${x})`)
+      const y = evaluate(exprWithX)
+      if (typeof y === "number" && isFinite(y)) {
+        return y
+      }
+    } catch (e) {
+      // Invalid expression
+    }
+    return null
   }
 
   const drawGraph = (expr: string, offsetX: number, offsetY: number, hoverPt: { x: number; y: number } | null = null) => {
@@ -211,27 +219,6 @@ export function Graph({ expression, variables }: GraphProps) {
     setDragStart({ x: e.clientX, y: e.clientY })
   }
 
-  const calculateYFromX = (x: number, expr: string): number | null => {
-    try {
-      let evalExpr = expr
-        .toLowerCase()
-        .replace(/y\s*=\s*/, "")
-        .trim()
-      
-      // Replace custom variables
-      evalExpr = replaceVariables(evalExpr)
-      
-      const exprWithX = evalExpr.replace(/x/g, `(${x})`)
-      const y = evaluate(exprWithX)
-      if (typeof y === "number" && isFinite(y)) {
-        return y
-      }
-    } catch (e) {
-      // Invalid expression
-    }
-    return null
-  }
-
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -245,10 +232,10 @@ export function Graph({ expression, variables }: GraphProps) {
       const graphDx = -(dx / canvas.width) * (baseRange * 2)
       const graphDy = (dy / canvas.height) * (baseRange * 2)
       
-      setPanOffset(prev => ({
-        x: prev.x + graphDx,
-        y: prev.y + graphDy
-      }))
+      onPanChange({
+        x: panOffset.x + graphDx,
+        y: panOffset.y + graphDy
+      })
       
       setDragStart({ x: e.clientX, y: e.clientY })
     } else {
@@ -283,94 +270,41 @@ export function Graph({ expression, variables }: GraphProps) {
 
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault()
-    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1
-    const newZoomLevel = Math.max(0.1, Math.min(10, zoomLevel * zoomFactor))
-    setZoomLevel(newZoomLevel)
-  }
-
-  const handleZoomIn = () => {
-    setZoomLevel(prev => Math.min(10, prev * 1.2))
-  }
-
-  const handleZoomOut = () => {
-    setZoomLevel(prev => Math.max(0.1, prev / 1.2))
-  }
-
-  const handleResetZoom = () => {
-    setZoomLevel(1)
-    setPanOffset({ x: 0, y: 0 })
+    // Wheel handling will be managed by parent component
   }
 
   useEffect(() => {
-    if (expression && shouldGraph(expression)) {
+    if (expression) {
       drawGraph(expression, panOffset.x, panOffset.y, hoverPoint)
     }
   }, [expression, panOffset, hoverPoint, variables, zoomLevel])
 
-  // Reset pan offset and zoom when expression changes
-  useEffect(() => {
-    setPanOffset({ x: 0, y: 0 })
-    setZoomLevel(1)
-  }, [expression])
-
-  if (!expression || !shouldGraph(expression)) {
-    return null
-  }
-
   return (
-    <div className="w-[600px] bg-[#0a0a0a] flex flex-col">
-      <div className="bg-[#0f0f0f] border-b border-[#1a1a1a] px-4 py-1 flex items-center justify-between">
-        <span className="text-[#777] text-sm">GRAPH</span>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleZoomOut}
-            className="text-xs text-[#666] hover:text-[#e0e0e0] transition-colors px-2 py-1 border border-[#333] rounded"
-          >
-            −
-          </button>
-          <span className="text-xs text-[#666] min-w-[60px] text-center">
-            {zoomLevel.toFixed(1)}x
-          </span>
-          <button
-            onClick={handleZoomIn}
-            className="text-xs text-[#666] hover:text-[#e0e0e0] transition-colors px-2 py-1 border border-[#333] rounded"
-          >
-            +
-          </button>
-          <button
-            onClick={handleResetZoom}
-            className="text-xs text-[#666] hover:text-[#e0e0e0] transition-colors px-2 py-1 border border-[#333] rounded ml-2"
-          >
-            RESET
-          </button>
-        </div>
+    <div className="flex-1 flex flex-col p-1 overflow-auto">
+      <div className="flex-1 flex items-center justify-center flex-shrink-0 px-2">
+        <canvas 
+          ref={canvasRef} 
+          width={570} 
+          height={520} 
+          className={`border border-[#1a1a1a] w-full ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
+          onWheel={handleWheel}
+        />
       </div>
-      <div className="flex-1 flex flex-col p-1 overflow-auto">
-        <div className="flex-1 flex items-center justify-center flex-shrink-0 px-2">
-          <canvas 
-            ref={canvasRef} 
-            width={570} 
-            height={520} 
-            className={`border border-[#1a1a1a] w-full ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseLeave}
-            onWheel={handleWheel}
-          />
-        </div>
-        <div className="mt-2 mx-2 border border-[#1a1a1a] bg-[#0f0f0f] px-3 py-2 flex-shrink-0">
-          <div className="text-[#777] text-xs mb-1">DOT POSITION</div>
-          <div className="text-[#e0e0e0] text-sm font-mono">
-            {hoverPoint ? (
-              <>
-                <span className="text-[#4a9eff]">x:</span> {hoverPoint.x.toFixed(3)}
-                <span className="ml-4 text-[#4a9eff]">y:</span> {hoverPoint.y.toFixed(3)}
-              </>
-            ) : (
-              <span className="text-[#666]">hover over graph</span>
-            )}
-          </div>
+      <div className="mt-2 mx-2 border border-[#1a1a1a] bg-[#0f0f0f] px-3 py-2 flex-shrink-0">
+        <div className="text-[#777] text-xs mb-1">DOT POSITION</div>
+        <div className="text-[#e0e0e0] text-sm font-mono">
+          {hoverPoint ? (
+            <>
+              <span className="text-[#4a9eff]">x:</span> {hoverPoint.x.toFixed(3)}
+              <span className="ml-4 text-[#4a9eff]">y:</span> {hoverPoint.y.toFixed(3)}
+            </>
+          ) : (
+            <span className="text-[#666]">hover over graph</span>
+          )}
         </div>
       </div>
     </div>

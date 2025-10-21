@@ -81,18 +81,44 @@ export function EntrySpace({
 
   const isGraphEquation = (expr: string): boolean => {
     const lower = expr.toLowerCase().trim()
+    
+    // Check for explicit y= equations first
+    if (lower.includes("y=") || lower.includes("y =")) {
+      return true
+    }
+    
+    // Check for standalone x or y variables (like "x" or "y^2")
+    if (lower.match(/\b[xy]\b/) !== null) {
+      return true
+    }
+    
+    // For trig functions, only treat as graph if they contain x or y
+    if (lower.includes("sin") || lower.includes("cos") || lower.includes("tan")) {
+      // If it contains x or y, it's a graph equation
+      if (lower.includes("x") || lower.includes("y")) {
+        return true
+      }
+      // If it's just sin(number), cos(number), tan(number), treat as numeric
+      return false
+    }
+    
+    return false
+  }
+
+  const isTrigFunction = (expr: string): boolean => {
+    const lower = expr.toLowerCase().trim()
     return (
       lower.includes("sin") ||
       lower.includes("cos") ||
-      lower.includes("tan") ||
-      lower.includes("y=") ||
-      lower.includes("y =") ||
-      lower.match(/\b[xy]\b/) !== null
-    )
+      lower.includes("tan")
+    ) && !lower.includes("x") && !lower.includes("y")
   }
 
   const replaceVariablesAndAnswers = (expr: string): string => {
     let result = expr
+
+    // Replace ln() with log() for natural logarithm
+    result = result.replace(/\bln\s*\(/g, 'log(')
 
     // Replace custom variables
     for (const [varName, value] of Object.entries(variables)) {
@@ -121,7 +147,7 @@ export function EntrySpace({
   const replaceAnswerReferences = replaceVariablesAndAnswers
 
   // Calculate preview result
-  const getPreview = (): { value: string; type: "normal" | "error" | "graph" | "variable" } => {
+  const getPreview = (): { value: string; type: "normal" | "error" | "graph" | "variable" | "trig" } => {
     if (!input.trim()) return { value: "", type: "normal" }
     
     // Check if it's a variable assignment
@@ -132,6 +158,19 @@ export function EntrySpace({
       }
       if (varAssignment.value !== undefined) {
         return { value: String(varAssignment.value), type: "variable" }
+      }
+    }
+    
+    // Check if it's a trig function (numeric)
+    if (isTrigFunction(input)) {
+      try {
+        const processedInput = replaceAnswerReferences(input)
+        const result = evaluate(processedInput)
+        if (typeof result === 'number' && isFinite(result)) {
+          return { value: String(result), type: "trig" }
+        }
+      } catch {
+        return { value: "ERR", type: "error" }
       }
     }
     
@@ -245,8 +284,22 @@ export function EntrySpace({
         let resultValue: string
         let intermediateExpr: string = ""
         
+        // Check if it's a trig function (numeric)
+        if (isTrigFunction(input)) {
+          try {
+            const processedInput = replaceAnswerReferences(input)
+            const result = evaluate(processedInput)
+            if (typeof result === 'number' && isFinite(result)) {
+              resultValue = String(result)
+            } else {
+              resultValue = "ERR"
+            }
+          } catch (error) {
+            resultValue = "ERR"
+          }
+        }
         // Check if it's a graph equation
-        if (isGraphEquation(input)) {
+        else if (isGraphEquation(input)) {
           resultValue = "GRAPH"
         } else {
           try {
@@ -352,6 +405,7 @@ export function EntrySpace({
                 preview.type === "error" ? "text-red-500" : 
                 preview.type === "graph" ? "text-orange-500" : 
                 preview.type === "variable" ? "text-green-500" :
+                preview.type === "trig" ? "text-orange-500" :
                 "text-[#4a9eff]"
               }`}>
                 {preview.value}
@@ -369,7 +423,7 @@ export function EntrySpace({
         <span className="text-[#444]">|</span>
         <span>variables: a=3 b=4</span>
         <span className="text-[#444]">|</span>
-        <span>auto-graph: sin cos tan y=</span>
+        <span>autograph: sin cos tan y= </span>
       </div>
     </div>
   )
